@@ -1,77 +1,60 @@
-import java.util.*;
-
 class Solution {
-
-    static final int MOD = 1000000007;
+    int[][] cnt;
+    Integer[][] dp;
 
     public int[] pathsWithMaxScore(List<String> board) {
-
         int n = board.size();
+        int m = board.get(0).length();
+        char[][] arr = new char[n][];
+        dp = new Integer[n][m];
+        cnt = new int[n][m];
 
-        int[][] score = new int[n][n];
-        int[][] ways = new int[n][n];
+        for (int i = 0; i < n; i++) {
+            arr[i] = board.get(i).toCharArray();
+        }
+        arr[0][0] = arr[n - 1][m - 1] = '0';
+        cnt[0][0] = 1;
 
-        for (int[] row : score)
-            Arrays.fill(row, -1);
+        int max = find(n - 1, m - 1, arr, n, m);
+        if (max < 0)
+            return new int[] { 0, 0 };
+        return new int[] { max, cnt[n - 1][m - 1] };
+    }
 
-        score[n - 1][n - 1] = 0;
-        ways[n - 1][n - 1] = 1;
+    int inf = (int) 1e7;
+    int MOD = (int) 1e9 + 7;
 
-        for (int i = n - 1; i >= 0; i--) {
-            for (int j = n - 1; j >= 0; j--) {
+    int find(int i, int j, char[][] arr, int n, int m) {
+        if (i == 0 && j == 0) {
+            return 0;
+        }
+        if (dp[i][j] != null)
+            return dp[i][j];
 
-                char ch = board.get(i).charAt(j);
+        int ans = -inf;
+        int knt = 0;
+        for (int[] d : dirs) {
+            int x = i + d[0];
+            int y = j + d[1];
 
-                if (ch == 'X')
-                    continue;
-
-                if (i == n - 1 && j == n - 1)
-                    continue;
-
-                int best = -1;
-                int cnt = 0;
-
-                int[][] dir = {
-                        {i + 1, j},
-                        {i, j + 1},
-                        {i + 1, j + 1}
-                };
-
-                for (int[] d : dir) {
-
-                    int x = d[0];
-                    int y = d[1];
-
-                    if (x >= n || y >= n)
-                        continue;
-
-                    if (score[x][y] == -1)
-                        continue;
-
-                    if (score[x][y] > best) {
-                        best = score[x][y];
-                        cnt = ways[x][y];
-                    } else if (score[x][y] == best) {
-                        cnt = (cnt + ways[x][y]) % MOD;
-                    }
+            if (isValid(x, y, n, m) && arr[x][y] != 'X') {
+                int res = find(x, y, arr, n, m) + arr[x][y] - '0';
+                if (ans == res) {
+                    knt += cnt[x][y];
+                    knt %= MOD;
+                } else if (res > ans) {
+                    knt = cnt[x][y];
+                    ans = res;
                 }
-
-                if (best == -1)
-                    continue;
-
-                int val = 0;
-
-                if (ch != 'S' && ch != 'E')
-                    val = ch - '0';
-
-                score[i][j] = best + val;
-                ways[i][j] = cnt;
             }
         }
+        cnt[i][j] = knt;
+        return dp[i][j] = ans;
+    }
 
-        if (ways[0][0] == 0)
-            return new int[]{0, 0};
+    int[][] dirs = { { -1, -1 }, { -1, 0 }, { 0, -1 } };
 
-        return new int[]{score[0][0], ways[0][0]};
+    boolean isValid(int i, int j, int n, int m) {
+        return i >= 0 && j >= 0 && i < n && j < m;
     }
 }
