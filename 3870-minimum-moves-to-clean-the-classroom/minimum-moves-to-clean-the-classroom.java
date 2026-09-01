@@ -1,154 +1,116 @@
 import java.util.*;
 
 class Solution {
-    public int minMoves(String[] classroom, int energy) {
-        int m = classroom.length;
-        int n = classroom[0].length();
+    private static final int[][] STEP = {
+        {1, 0}, {-1, 0}, {0, 1}, {0, -1}
+    };
 
-        int startR = 0;
-        int startC = 0;
+    private static final class State {
+        final int cell;
+        final int cleaned;
+        final int power;
+
+        State(int cell, int cleaned, int power) {
+            this.cell = cell;
+            this.cleaned = cleaned;
+            this.power = power;
+        }
+    }
+
+    public int minMoves(String[] classroom, int energy) {
+        final int height = classroom.length;
+        final int width = classroom[0].length();
+        final int cells = height * width;
+
+        char[][] room = new char[height][];
+        int[] litterBit = new int[cells];
+
+        int start = -1;
         int litterCount = 0;
 
-        int[][] litterId = new int[m][n];
+        for (int r = 0; r < height; r++) {
+            room[r] = classroom[r].toCharArray();
 
-        for (int[] row : litterId) {
-            Arrays.fill(row, -1);
-        }
+            for (int c = 0; c < width; c++) {
+                int id = r * width + c;
 
-        // Find starting position and assign IDs to litter
-        for (int r = 0; r < m; r++) {
-            for (int c = 0; c < n; c++) {
-
-                char ch = classroom[r].charAt(c);
-
-                if (ch == 'S') {
-                    startR = r;
-                    startC = c;
-                }
-
-                if (ch == 'L') {
-                    litterId[r][c] = litterCount++;
+                switch (room[r][c]) {
+                    case 'S' -> start = id;
+                    case 'L' -> litterBit[id] = 1 << litterCount++;
+                    default -> { }
                 }
             }
         }
 
-        // All litter collected
-        int targetMask = (1 << litterCount) - 1;
-
-        if (targetMask == 0) {
-            return 0;
-        }
+        final int allClean = (1 << litterCount) - 1;
 
         /*
-         * State = (position, mask, energy)
+         * strongest[mask][cell] records the greatest remaining
+         * energy seen for this cleaned-litter set at this cell.
          */
+        int[][] strongest = new int[1 << litterCount][cells];
 
-        int states = m * n * (1 << litterCount) * (energy + 1);
+        for (int[] row : strongest) {
+            Arrays.fill(row, -1);
+        }
 
-        boolean[] visited = new boolean[states];
-        int[] queue = new int[states];
+        ArrayDeque<State> frontier = new ArrayDeque<>();
 
-        int head = 0;
-        int tail = 0;
-
-        int startState = encode(
-                startR,
-                startC,
-                0,
-                energy,
-                n,
-                litterCount,
-                energy
-        );
-
-        queue[tail++] = startState;
-        visited[startState] = true;
+        frontier.addLast(new State(start, 0, energy));
+        strongest[0][start] = energy;
 
         int moves = 0;
 
-        int[] dr = {-1, 1, 0, 0};
-        int[] dc = {0, 0, -1, 1};
+        while (!frontier.isEmpty()) {
+            int levelSize = frontier.size();
 
-        while (head < tail) {
+            while (levelSize-- > 0) {
+                State cur = frontier.removeFirst();
 
-            int size = tail - head;
+                if (cur.cleaned == allClean) {
+                    return moves;
+                }
 
-            while (size-- > 0) {
+                /*
+                 * A state reaching the same (cell, mask) with more
+                 * energy dominates this state.
+                 */
+                if (cur.power < strongest[cur.cleaned][cur.cell]
+                        || cur.power == 0) {
+                    continue;
+                }
 
-                int state = queue[head++];
+                int r = cur.cell / width;
+                int c = cur.cell % width;
 
-                // Decode energy
-                int currentEnergy = state % (energy + 1);
-                state /= (energy + 1);
+                for (int[] d : STEP) {
+                    int nr = r + d[0];
+                    int nc = c + d[1];
 
-                // Decode mask
-                int maskBits = (1 << litterCount) - 1;
-                int mask = state & maskBits;
-                state >>= litterCount;
-
-                // Decode position
-                int position = state;
-
-                int r = position / n;
-                int c = position % n;
-
-                // Try 4 directions
-                for (int d = 0; d < 4; d++) {
-
-                    int nr = r + dr[d];
-                    int nc = c + dc[d];
-
-                    // Outside grid
-                    if (nr < 0 || nr >= m || nc < 0 || nc >= n) {
+                    if (!inside(nr, nc, height, width)
+                            || room[nr][nc] == 'X') {
                         continue;
                     }
 
-                    char cell = classroom[nr].charAt(nc);
+                    int nextCell = nr * width + nc;
 
-                    // Obstacle
-                    if (cell == 'X') {
+                    int nextMask =
+                            cur.cleaned | litterBit[nextCell];
+
+                    int nextPower =
+                            room[nr][nc] == 'R'
+                                    ? energy
+                                    : cur.power - 1;
+
+                    if (nextPower <= strongest[nextMask][nextCell]) {
                         continue;
                     }
 
-                    // No energy left
-                    if (currentEnergy == 0) {
-                        continue;
-                    }
+                    strongest[nextMask][nextCell] = nextPower;
 
-                    // Moving costs 1 energy
-                    int newEnergy = currentEnergy - 1;
-                    int newMask = mask;
-
-                    // Collect litter
-                    if (cell == 'L') {
-                        int id = litterId[nr][nc];
-                        newMask |= (1 << id);
-                    }
-
-                    // Reset energy
-                    if (cell == 'R') {
-                        newEnergy = energy;
-                    }
-
-                    // All litter collected
-                    if (newMask == targetMask) {
-                        return moves + 1;
-                    }
-
-                    int nextState = encode(
-                            nr,
-                            nc,
-                            newMask,
-                            newEnergy,
-                            n,
-                            litterCount,
-                            energy
+                    frontier.addLast(
+                            new State(nextCell, nextMask, nextPower)
                     );
-
-                    if (!visited[nextState]) {
-                        visited[nextState] = true;
-                        queue[tail++] = nextState;
-                    }
                 }
             }
 
@@ -158,19 +120,11 @@ class Solution {
         return -1;
     }
 
-    private int encode(
-            int r,
-            int c,
-            int mask,
-            int energyLeft,
-            int n,
-            int litterCount,
-            int maxEnergy
-    ) {
-        int position = r * n + c;
-
-        return ((position << litterCount) | mask)
-                * (maxEnergy + 1)
-                + energyLeft;
+    private static boolean inside(
+            int r, int c, int height, int width) {
+        return r >= 0
+                && r < height
+                && c >= 0
+                && c < width;
     }
 }
